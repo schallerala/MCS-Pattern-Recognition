@@ -52,15 +52,15 @@ class EuclideanDistanceMeasure(DistanceMeasure):
 class KNN:
     distance_measure: DistanceMeasure
     k_nearest: int
-    train_set_YX: DataFrame
+    Y: Series
+    X: DataFrame
 
     def classify(self, input_x: Series):
         def apply_distance(row_a, row_b, distance_measure: DistanceMeasure) -> float:
             return distance_measure.measure(row_a, row_b)
 
-        x_values = self.train_set_YX.iloc[:, 1:]
-        result_distance = x_values.apply(apply_distance, axis=1, args=(input_x, self.distance_measure)).to_frame('dist')
-        result_distance['class'] = self.train_set_YX.iloc[:, 0]
+        result_distance = self.X.apply(apply_distance, axis=1, args=(input_x, self.distance_measure)).to_frame('dist')
+        result_distance['class'] = self.Y
 
-        nearest_classes = result_distance.nsmallest(self.k_nearest, 'dist').iloc[:,1]
+        nearest_classes = result_distance.nsmallest(self.k_nearest, 'dist').iloc[:, 1]
         return nearest_classes.mode()[0]
