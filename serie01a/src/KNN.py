@@ -83,38 +83,38 @@ class EuclideanDistanceMeasure(DistanceMeasure):
 
 
 
-def prepare_masks(new_shape: (int, int)) -> []:
-    x, y = new_shape
-    x_parts = (int)(28 / x)
-    y_parts = (int)(28 / y)
-
-    mask = np.ones(new_shape, dtype=np.int0)
-
-    masks = []
-
-    for xi in range(x_parts):
-        x_start = x * xi
-        x_end = x_start + x
-        for yi in range(y_parts):
-            y_start = y * yi
-            y_end = y_start + y
-
-            pad_x_before = x_start
-            pad_x_after = 28 - x_end
-            pad_y_before = y_start
-            pad_y_after = 28 - y_end
-
-            mask_i = np.pad(mask, ((pad_x_before, pad_x_after), (pad_y_before, pad_y_after)))
-
-            masks.append(mask_i.flatten() == 1)
-
-    return masks
-
-
-
-def reshape_frame(df: DataFrame, masks: [[]]) -> DataFrame:
-    sums = [df.iloc[:, mask].sum(1) for mask in masks]
-    return pd.DataFrame(np.array(sums).T)
+# def prepare_masks(new_shape: (int, int)) -> []:
+#     x, y = new_shape
+#     x_parts = (int)(28 / x)
+#     y_parts = (int)(28 / y)
+#
+#     mask = np.ones(new_shape, dtype=np.int0)
+#
+#     masks = []
+#
+#     for xi in range(x_parts):
+#         x_start = x * xi
+#         x_end = x_start + x
+#         for yi in range(y_parts):
+#             y_start = y * yi
+#             y_end = y_start + y
+#
+#             pad_x_before = x_start
+#             pad_x_after = 28 - x_end
+#             pad_y_before = y_start
+#             pad_y_after = 28 - y_end
+#
+#             mask_i = np.pad(mask, ((pad_x_before, pad_x_after), (pad_y_before, pad_y_after)))
+#
+#             masks.append(mask_i.flatten() == 1)
+#
+#     return masks
+#
+#
+#
+# def reshape_frame(df: DataFrame, masks: [[]]) -> DataFrame:
+#     sums = [df.iloc[:, mask].sum(1) for mask in masks]
+#     return pd.DataFrame(np.array(sums).T)
 
 
 
@@ -122,23 +122,20 @@ def reshape_frame(df: DataFrame, masks: [[]]) -> DataFrame:
 class KNN(ClassifierMixin, BaseEstimator):
     distance_measure: DistanceMeasure
     k_nearest: int
-    reshape: int
     X: DataFrame
     Y: Series
 
-    def __init__(self, distance_measure: DistanceMeasure, k_nearest: int, reshape: tuple):
+    def __init__(self, distance_measure: DistanceMeasure, k_nearest: int):
         self.distance_measure = distance_measure
         self.k_nearest = k_nearest
-        self.reshape = reshape
 
     def fit(self, X, Y):
-        self.X = reshape_frame(X, prepare_masks(self.reshape))
+        self.X = X
         self.Y = Y
 
         return self
 
     def predict(self, x: DataFrame):
-        reshaped_x = reshape_frame(x, prepare_masks(self.reshape))
         # Each col is the result x_i with the distance compared to train X (rows)
         result_distance = self.distance_measure.apply(self.X, x)
 

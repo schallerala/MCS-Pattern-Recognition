@@ -1,65 +1,58 @@
-import logging
-from threading import Thread
+# Y, X = load_dataframe('../train.csv', nrows=2500)
+#
+# from sklearn.model_selection import RandomizedSearchCV
+#
+# dimensions = [14,7,4,2]
+# shapes = list(itertools.product(dimensions, dimensions))
+#
+# hyperparameters = dict(reshape=shapes)
+# model = KNN(EuclideanDistanceMeasure(), 3, (28, 28))
+# rscv = RandomizedSearchCV(model, hyperparameters, n_jobs=4, random_state=42)
+# rscv.fit(X, Y)
+#
+# best_params = rscv.best_params_
+# print(f"Best parameters: {best_params}")
+#
+#
+# model.set_params(**best_params)
 
-from KNN import *
+
 import itertools
+import multiprocessing
 
+import numpy as np
+from math import ceil
+from joblib import Parallel, delayed
 
-Y, X = load_dataframe('../train.csv', nrows=2500)
-
-from sklearn.model_selection import RandomizedSearchCV
-
-dimensions = [14,7,4,2]
-shapes = list(itertools.product(dimensions, dimensions))
-
-hyperparameters = dict(reshape=shapes)
-model = KNN(EuclideanDistanceMeasure(), 3, (28, 28))
-rscv = RandomizedSearchCV(model, hyperparameters, n_jobs=4, random_state=42)
-rscv.fit(X, Y)
-
-best_params = rscv.best_params_
-print(f"Best parameters: {best_params}")
-
-
-model.set_params(**best_params)
-
-
-print("Start with test set")
-
-
-
-def thread_batch_job(skip, rows, model):
-    y_test, x_test = load_dataframe('../test.csv', nrows=rows, skip=skip)
-    # score = model.score(x_test, y_test)
-    score = 0
-    print(f"{score}: {model} [skip: {skip}]")
-
-
-def thread_job(model):
-    # total lines 15000
-    for skip in range((int)(15000 / 1000)): # batches of 1000
-        thread_batch_job(skip, 1000, model)
-
+from KNN import load_dataframe, KNN, EuclideanDistanceMeasure, ManhattanDistanceMeasure
 
 Ks = [1, 3, 5, 10, 15]
 distance_measures = [ManhattanDistanceMeasure(), EuclideanDistanceMeasure()]
 
 
-threads = []
+TOTAL_LINES = 15000
 
 
-Y, X = load_dataframe('../train.csv', nrows=1000)
-
-for [K, dist] in itertools.product(Ks, distance_measures):
-    thread = Thread(target=thread_job, args=(KNN(dist, K, best_params['reshape']).fit(X, Y)))
-    threads.append(thread)
-    thread.start()
+combinations = list(itertools.product(Ks, distance_measures))
+combinations_count = len(combinations)
 
 
-for index, thread in enumerate(threads):
-    logging.info("Main    : before joining thread %d.", index)
-    thread.join()
-    logging.info("Main    : thread %d done", index)
+test_lines_per_batch = ceil(TOTAL_LINES / combinations_count)
+np.arange(0, TOTAL_LINES, test_lines_per_batch)
+starts = np.arange(0, TOTAL_LINES, test_lines_per_batch)
+num_lines = [test_lines_per_batch] * len(starts)
+
+# (start, num_lines, K, distance)
+process_params = [(s, e, K, d) for s, e, (K, d) in zip(starts, num_lines, combinations)]
 
 
-print("Done")
+def batch_process(start, num_lines, K, distance):
+    Y, X = load_dataframe('../train.csv', nrows=None)
+    model = KNN(distance, K).fit(X, Y)
+    y_test, x_test = load_dataframe('../test.csv', nrows=num_lines, skip=start)
+    score = model.score(x_test, y_test)
+    return (score, K, distance)
+
+if __name__ == '__main__':
+    r = Parallel(n_jobs=multiprocessing.cpu_count(), verbose=10)(delayed(batch_process)(*args) for args in process_params)
+    print(r)
