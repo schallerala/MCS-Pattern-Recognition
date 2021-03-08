@@ -1,42 +1,65 @@
-import pandas as pd
-from pandas import DataFrame, Series
-from tqdm import tqdm
+import logging
+from threading import Thread
 
-from KNN import KNN, ManhattanDistanceMeasure, EuclideanDistanceMeasure
+from KNN import *
+import itertools
 
-Ks = [3, 5]
-# Ks = [1, 3, 5, 10, 15]
+
+Y, X = load_dataframe('../train.csv', nrows=2500)
+
+from sklearn.model_selection import RandomizedSearchCV
+
+dimensions = [14,7,4,2]
+shapes = list(itertools.product(dimensions, dimensions))
+
+hyperparameters = dict(reshape=shapes)
+model = KNN(EuclideanDistanceMeasure(), 3, (28, 28))
+rscv = RandomizedSearchCV(model, hyperparameters, n_jobs=4, random_state=42)
+rscv.fit(X, Y)
+
+best_params = rscv.best_params_
+print(f"Best parameters: {best_params}")
+
+
+model.set_params(**best_params)
+
+
+print("Start with test set")
+
+
+
+def thread_batch_job(skip, rows, model):
+    y_test, x_test = load_dataframe('../test.csv', nrows=rows, skip=skip)
+    # score = model.score(x_test, y_test)
+    score = 0
+    print(f"{score}: {model} [skip: {skip}]")
+
+
+def thread_job(model):
+    # total lines 15000
+    for skip in range((int)(15000 / 1000)): # batches of 1000
+        thread_batch_job(skip, 1000, model)
+
+
+Ks = [1, 3, 5, 10, 15]
 distance_measures = [ManhattanDistanceMeasure(), EuclideanDistanceMeasure()]
 
 
-columns = ['class']
-X_columns = [i for i in range(28 * 28)]
-columns.extend(X_columns)
+threads = []
 
 
-def load_dataframe(filename: str, nrows: int = 1000) -> (Series, DataFrame):
-    df = pd.read_csv(filename, header=None, names=columns, nrows=nrows)
-    print(df.info)
+Y, X = load_dataframe('../train.csv', nrows=1000)
 
-    return df['class'], df.iloc[:, 1:]
-
-
-Y, X = load_dataframe('../train.csv')
-Y_test, X_test = load_dataframe('../test.csv', 100)
-
-# https://stackoverflow.com/a/34365537/3771148
-# to track the progress of apply
-tqdm.pandas()
+for [K, dist] in itertools.product(Ks, distance_measures):
+    thread = Thread(target=thread_job, args=(KNN(dist, K, best_params['reshape']).fit(X, Y)))
+    threads.append(thread)
+    thread.start()
 
 
-def classify_test(row: Series, model):
-    return model.classify(row)
+for index, thread in enumerate(threads):
+    logging.info("Main    : before joining thread %d.", index)
+    thread.join()
+    logging.info("Main    : thread %d done", index)
 
 
-for K in Ks:
-    for measure in distance_measures:
-        print(f"{K}: {measure}")
-        classifier = KNN(measure, K, Y, X)
-        classified_as = X_test.progress_apply(classify_test, axis=1, args=(classifier,))
-
-        print((classified_as == Y_test).value_counts())
+print("Done")
