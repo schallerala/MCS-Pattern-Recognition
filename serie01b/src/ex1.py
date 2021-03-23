@@ -10,22 +10,22 @@ from loading_data import load_dataframe
 
 Ks = [5, 7, 9, 10, 12, 15]
 
-TOTAL_TEST_LINES = 15000
+TOTAL_TRAIN_LINES = 27000
 
-test_lines_per_batch = ceil(TOTAL_TEST_LINES / len(Ks))
-np.arange(0, TOTAL_TEST_LINES, test_lines_per_batch)
-starts = np.arange(0, TOTAL_TEST_LINES, test_lines_per_batch)
-num_lines = [test_lines_per_batch] * len(starts)
+TEST_LINES_PER_BATCH = 25000
 
+diff = TOTAL_TRAIN_LINES - TEST_LINES_PER_BATCH
+
+starts = np.arange(0, diff, diff / len(Ks))
 
 # (start, num_lines, K)
-process_params = [(s, e, K) for s, e, K in zip(starts, num_lines, Ks)]
-
-
+process_params = [(int(s), e, K) for s, e, K in zip(starts, [TEST_LINES_PER_BATCH] * len(Ks), Ks)]
 
 def batch_process(start, num_lines, K):
-    _, X = load_dataframe('../train.csv', nrows=None)
+    _, X = load_dataframe('../train.csv', nrows=num_lines, skip=start)
+    print("loaded")
     model = KMeans(K).fit(X)
+    print("fitted")
     return (K, model.c_index_score(), model.dunn_index_score())
 
 
